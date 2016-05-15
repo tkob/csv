@@ -1,19 +1,21 @@
 structure CSV :> sig
+  type 'strm input1 = (char, 'strm) StringCvt.reader
   type 'strm config = {
-    delim : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader,
-    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
+    delim : 'strm input1 -> 'strm input1,
+    quote : 'strm input1 -> 'strm -> 'strm option,
     textData : char -> bool,
-    escape : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader
+    escape : 'strm input1 -> 'strm input1
   }
 
-  val scan : 'strm config -> (char, 'strm) StringCvt.reader -> (string list, 'strm) StringCvt.reader
-  val scanCSV : (char, 'strm) StringCvt.reader -> (string list, 'strm) StringCvt.reader
+  val scan : 'strm config -> 'strm input1 -> (string list, 'strm) StringCvt.reader
+  val scanCSV : 'strm input1 -> (string list, 'strm) StringCvt.reader
 end = struct
+  type 'strm input1 = (char, 'strm) StringCvt.reader
   type 'strm config = {
-    delim : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader,
-    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
+    delim : 'strm input1 -> 'strm input1,
+    quote : 'strm input1 -> 'strm -> 'strm option,
     textData : char -> bool,
-    escape : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader
+    escape : 'strm input1 -> 'strm input1
   }
 
   infix >>=
