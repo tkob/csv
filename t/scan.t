@@ -6,7 +6,7 @@
     ...
     val scan = fn : string -> string list * string
 
-# scan
+# Successfull scan
 
 ## Empty
 
@@ -97,3 +97,14 @@
     - val (record, rest) = scan rest;
     val record = ["seven","eight"] : string list
     val rest = "" : string
+
+# Unsuccessful scan
+
+## Unquoted double quotes
+
+```
+- val (record, rest) = scan "one,two\"three";
+
+uncaught exception Match [nonexhaustive match failure]
+...
+```
