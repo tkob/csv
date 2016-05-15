@@ -3,7 +3,9 @@ structure CSV :> sig
 
   type 'strm config = {
     delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
-    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
+    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
+    textData : char -> bool,
+    escape : (char, 'strm) StringCvt.reader -> 'strm -> char * 'strm
   }
 
   val scan : 'strm config -> (char, 'strm) StringCvt.reader -> (string list, 'strm) StringCvt.reader
@@ -13,7 +15,9 @@ end = struct
 
   type 'strm config = {
     delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
-    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
+    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
+    textData : char -> bool,
+    escape : (char, 'strm) StringCvt.reader -> 'strm -> char * 'strm
   }
 
   fun char c input1 strm =
@@ -50,17 +54,11 @@ end = struct
         newline input1 strm handle CSV =>
         mapFst (fn () => "") (eof input1 strm)
 
-  fun textData input1 strm =
+  fun textData (config : 'strm config) input1 strm =
         case input1 strm of
              NONE => raise CSV
            | SOME (c, strm') =>
-               if c < Char.chr 0x20 orelse
-                  c = Char.chr 0x22 orelse
-                  c = Char.chr 0x2c orelse
-                  c = Char.chr 0x7f then
-                 raise CSV
-               else
-                 (c, strm')
+               if #textData config c then (c, strm') else raise CSV
 
   fun repeat class input1 strm =
         let
@@ -75,7 +73,7 @@ end = struct
           loop [] strm
         end
 
-  fun nonEscaped input1 strm = repeat textData input1 strm
+  fun nonEscaped config input1 strm = repeat (textData config) input1 strm
 
   fun dquotes input1 strm =
         let
@@ -85,17 +83,17 @@ end = struct
           (#"\"", strm')
         end
 
-  fun escaped' input1 strm =
-        textData input1 strm  handle CSV =>
+  fun escaped' (config : 'strm config) input1 strm =
+        textData config input1 strm handle CSV =>
         comma input1 strm handle CSV =>
         cr input1 strm    handle CSV =>
         lf input1 strm    handle CSV =>
-        dquotes input1 strm
+        (#escape config) input1 strm
 
   fun escaped (config : 'strm config) input1 strm =
         let
           val strm' = (#quote config) input1 strm
-          val (s, strm'') = repeat escaped' input1 strm'
+          val (s, strm'') = repeat (escaped' config) input1 strm'
           val strm''' = (#quote config) input1 strm''
         in
           (s, strm''')
@@ -104,7 +102,7 @@ end = struct
   fun field config input1 strm =
         let
           val (cs, strm') =
-            escaped config input1 strm handle CSV => nonEscaped input1 strm
+            escaped config input1 strm handle CSV => nonEscaped config input1 strm
         in
           (implode cs, strm')
         end
@@ -145,9 +143,14 @@ end = struct
         let
           val csvConfig =
             { delim = discard comma,
-              quote = discard dquote }
+              quote = discard dquote,
+              textData = fn c => not (
+                c < Char.chr 0x20 orelse
+                c = Char.chr 0x22 orelse
+                c = Char.chr 0x2c orelse
+                c = Char.chr 0x7f),
+              escape = dquotes }
         in
           scan csvConfig input1 strm
         end
-
 end
