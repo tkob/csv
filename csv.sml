@@ -1,8 +1,18 @@
 structure CSV :> sig
   exception CSV
-  val scan : (char, 'a) StringCvt.reader -> (string list, 'a) StringCvt.reader
+
+  type 'strm config = {
+    delim : (char, 'strm) StringCvt.reader -> 'strm -> (unit * 'strm)
+  }
+
+  val scan : ('a) config -> (char, 'a) StringCvt.reader -> (string list, 'a) StringCvt.reader
+  val scanCSV : (char, 'a) StringCvt.reader -> (string list, 'a) StringCvt.reader
 end = struct
   exception CSV
+
+  type ('strm) config = {
+    delim : (char, 'strm) StringCvt.reader -> 'strm -> (unit * 'strm)
+  }
 
   fun char c input1 strm =
         case input1 strm of
@@ -104,28 +114,31 @@ end = struct
           ((), strm')
         end
 
-  fun field' input1 strm =
+  fun field' (config : 'a config) input1 strm =
         let
-          val ((), strm') = discard comma input1 strm
+          val ((), strm') = (#delim config) input1 strm
           val (field, strm'') = field input1 strm'
         in
           (field, strm'')
         end
 
-  fun record input1 strm =
+  fun record config input1 strm =
         let
           val (first, strm') = field input1 strm
-          val (rest, strm'') = repeat field' input1 strm'
+          val (rest, strm'') = repeat (field' config) input1 strm'
         in
           (first::rest, strm'')
         end
 
-  fun scan input1 strm =
+  fun scan config input1 strm =
         let
-          val (record, strm') = record input1 strm
+          val (record, strm') = record config input1 strm
           val (_, strm'') = newlineOrEof input1 strm'
         in
           SOME (record, strm'')
         end
         handle CSV => NONE
+
+  fun scanCSV input1 strm = scan {delim=discard comma}  input1 strm
+
 end
