@@ -3,7 +3,7 @@ structure CSV :> sig
   type 'strm config = {
     delim : 'strm input1 -> (string, 'strm) StringCvt.reader,
     quote : 'strm input1 -> 'strm -> 'strm option,
-    textData : char -> bool,
+    textData : 'strm input1 -> (string, 'strm) StringCvt.reader,
     escape : 'strm input1 -> (string, 'strm) StringCvt.reader
   }
 
@@ -14,7 +14,7 @@ end = struct
   type 'strm config = {
     delim : 'strm input1 -> (string, 'strm) StringCvt.reader,
     quote : 'strm input1 -> 'strm -> 'strm option,
-    textData : char -> bool,
+    textData : 'strm input1 -> (string, 'strm) StringCvt.reader,
     escape : 'strm input1 -> (string, 'strm) StringCvt.reader
   }
 
@@ -68,21 +68,10 @@ end = struct
   fun newlineOrEof input1 strm =
         (newline || eof) input1 strm
 
-  fun textData' (config : 'strm config) input1 strm =
-        case input1 strm of
-             NONE => NONE
-           | SOME (c, strm') =>
-               if #textData config c then SOME (c, strm') else NONE
-
-  fun textData config input1 strm =
-        textData' config input1 strm           >>= (fn (c, strm') =>
-        repeat (textData' config) input1 strm' >>= (fn (cs, strm'') =>
-        SOME (implode (c::cs), strm'')))
-
-  fun nonEscaped config input1 strm = repeat (textData config) input1 strm
+  fun nonEscaped (config :'strm config) input1 strm = repeat (#textData config) input1 strm
 
   fun escaped' (config : 'strm config) input1 strm =
-        (textData config || #delim config || cr || lf || #escape config) input1 strm
+        (#textData config || #delim config || cr || lf || #escape config) input1 strm
 
   fun escaped (config : 'strm config) input1 strm =
         (#quote config) input1 strm           >>= (fn strm' =>
@@ -108,6 +97,17 @@ end = struct
         newlineOrEof input1 strm' >>= (fn (_, strm'') =>
         SOME (record, strm'')))
 
+  (* utility for textData config *)
+  fun textData' pred input1 strm =
+        case input1 strm of
+             NONE => NONE
+           | SOME (c, strm') =>
+               if pred c then SOME (c, strm') else NONE
+  fun textData pred input1 strm =
+        textData' pred input1 strm           >>= (fn (c, strm') =>
+        repeat (textData' pred) input1 strm' >>= (fn (cs, strm'') =>
+        SOME (implode (c::cs), strm'')))
+
   (* for CSV *)
   fun comma input1 strm = char #"," input1 strm
   fun dquote input1 strm = char #"\"" input1 strm
@@ -121,11 +121,11 @@ end = struct
           val csvConfig =
             { delim = comma,
               quote = discard dquote,
-              textData = fn c => not (
+              textData = textData (fn c => not (
                 c < Char.chr 0x20 orelse
                 c = Char.chr 0x22 orelse
                 c = Char.chr 0x2c orelse
-                c = Char.chr 0x7f),
+                c = Char.chr 0x7f)),
               escape = dquotes }
         in
           scan csvConfig input1 strm
