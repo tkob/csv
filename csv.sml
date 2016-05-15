@@ -1,10 +1,10 @@
 structure CSV :> sig
   type 'strm input1 = (char, 'strm) StringCvt.reader
   type 'strm config = {
-    delim : 'strm input1 -> 'strm input1,
+    delim : 'strm input1 -> (string, 'strm) StringCvt.reader,
     quote : 'strm input1 -> 'strm -> 'strm option,
     textData : char -> bool,
-    escape : 'strm input1 -> 'strm input1
+    escape : 'strm input1 -> (string, 'strm) StringCvt.reader
   }
 
   val scan : 'strm config -> 'strm input1 -> (string list, 'strm) StringCvt.reader
@@ -12,41 +12,41 @@ structure CSV :> sig
 end = struct
   type 'strm input1 = (char, 'strm) StringCvt.reader
   type 'strm config = {
-    delim : 'strm input1 -> 'strm input1,
+    delim : 'strm input1 -> (string, 'strm) StringCvt.reader,
     quote : 'strm input1 -> 'strm -> 'strm option,
     textData : char -> bool,
-    escape : 'strm input1 -> 'strm input1
+    escape : 'strm input1 -> (string, 'strm) StringCvt.reader
   }
 
   infix >>=
   fun (SOME x) >>= k = k x
     | NONE     >>= k = NONE
 
+  fun mapFst f (SOME (fst, snd)) = SOME (f fst, snd)
+    | mapFst f NONE = NONE
+
   fun char c input1 strm =
         case input1 strm of
              NONE => NONE
            | SOME (c', strm') => if c' = c then SOME (c', strm') else NONE
 
-  fun comma input1 strm = char #"," input1 strm
-  fun dquote input1 strm = char #"\"" input1 strm
-  fun cr input1 strm = char (Char.chr 0x0d) input1 strm
-  fun lf input1 strm = char (Char.chr 0x0a) input1 strm
+  fun comma input1 strm = mapFst String.str (char #"," input1 strm)
+  fun dquote input1 strm = mapFst String.str (char #"\"" input1 strm)
+  fun cr input1 strm = mapFst String.str (char (Char.chr 0x0d) input1 strm)
+  fun lf input1 strm = mapFst String.str (char (Char.chr 0x0a) input1 strm)
 
   fun crlf input1 strm =
         cr input1 strm  >>= (fn (cr', strm')  =>
         lf input1 strm' >>= (fn (lf', strm'') =>
-        SOME (implode [cr', lf'], strm'')))
-
-  fun mapFst f (SOME (fst, snd)) = SOME (f fst, snd)
-    | mapFst f NONE = NONE
+        SOME (cr' ^ lf', strm'')))
 
   fun newline input1 strm =
         case crlf input1 strm of
              SOME x => SOME x
            | NONE =>
-               case mapFst String.str (cr input1 strm) of
+               case cr input1 strm of
                     SOME x => SOME x
-                  | NONE => mapFst String.str (lf input1 strm)
+                  | NONE => lf input1 strm
 
   fun eof input1 strm =
         case input1 strm of
@@ -62,7 +62,7 @@ end = struct
         case input1 strm of
              NONE => NONE
            | SOME (c, strm') =>
-               if #textData config c then SOME (c, strm') else NONE
+               if #textData config c then SOME (String.str c, strm') else NONE
 
   fun repeat class input1 strm =
         let
@@ -84,7 +84,7 @@ end = struct
   fun dquotes input1 strm =
         discard dquote input1 strm  >>= (fn strm'  =>
         discard dquote input1 strm' >>= (fn strm'' =>
-        SOME (#"\"", strm'')))
+        SOME ("\"", strm'')))
 
   infix ||
   fun (a || b) input1 strm =
@@ -102,7 +102,7 @@ end = struct
         SOME (s, strm'''))))
 
   fun field config input1 strm =
-          mapFst implode ((escaped config || nonEscaped config) input1 strm)
+          mapFst concat ((escaped config || nonEscaped config) input1 strm)
 
   fun field' (config : 'strm config) input1 strm =
         (#delim config) input1 strm >>= (fn (_, strm') =>
