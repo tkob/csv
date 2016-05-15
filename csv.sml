@@ -2,7 +2,8 @@ structure CSV :> sig
   exception CSV
 
   type 'strm config = {
-    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
+    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
+    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
   }
 
   val scan : ('a) config -> (char, 'a) StringCvt.reader -> (string list, 'a) StringCvt.reader
@@ -11,7 +12,8 @@ end = struct
   exception CSV
 
   type ('strm) config = {
-    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
+    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
+    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
   }
 
   fun char c input1 strm =
@@ -90,19 +92,19 @@ end = struct
         lf input1 strm    handle CSV =>
         dquotes input1 strm
 
-  fun escaped input1 strm =
+  fun escaped (config : 'a config) input1 strm =
         let
-          val (_, strm') = dquote input1 strm
+          val strm' = (#quote config) input1 strm
           val (s, strm'') = repeat escaped' input1 strm'
-          val (_, strm''') = dquote input1 strm''
+          val strm''' = (#quote config) input1 strm''
         in
           (s, strm''')
         end
 
-  fun field input1 strm =
+  fun field config input1 strm =
         let
           val (cs, strm') =
-            escaped input1 strm handle CSV => nonEscaped input1 strm
+            escaped config input1 strm handle CSV => nonEscaped input1 strm
         in
           (implode cs, strm')
         end
@@ -117,14 +119,14 @@ end = struct
   fun field' (config : 'a config) input1 strm =
         let
           val strm' = (#delim config) input1 strm
-          val (field, strm'') = field input1 strm'
+          val (field, strm'') = field config input1 strm'
         in
           (field, strm'')
         end
 
   fun record config input1 strm =
         let
-          val (first, strm') = field input1 strm
+          val (first, strm') = field config input1 strm
           val (rest, strm'') = repeat (field' config) input1 strm'
         in
           (first::rest, strm'')
@@ -139,6 +141,13 @@ end = struct
         end
         handle CSV => NONE
 
-  fun scanCSV input1 strm = scan {delim=discard comma}  input1 strm
+  fun scanCSV input1 strm =
+        let
+          val csvConfig =
+            { delim = discard comma,
+              quote = discard dquote }
+        in
+          scan csvConfig input1 strm
+        end
 
 end
