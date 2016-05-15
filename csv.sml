@@ -2,7 +2,7 @@ structure CSV :> sig
   type 'strm input1 = (char, 'strm) StringCvt.reader
   type 'strm config = {
     delim : 'strm input1 -> (string, 'strm) StringCvt.reader,
-    quote : 'strm input1 -> 'strm -> 'strm option,
+    quote : ('strm input1 -> 'strm -> 'strm option) option,
     textData : 'strm input1 -> (string, 'strm) StringCvt.reader,
     escape : 'strm input1 -> (string, 'strm) StringCvt.reader
   }
@@ -13,7 +13,7 @@ end = struct
   type 'strm input1 = (char, 'strm) StringCvt.reader
   type 'strm config = {
     delim : 'strm input1 -> (string, 'strm) StringCvt.reader,
-    quote : 'strm input1 -> 'strm -> 'strm option,
+    quote : ('strm input1 -> 'strm -> 'strm option) option,
     textData : 'strm input1 -> (string, 'strm) StringCvt.reader,
     escape : 'strm input1 -> (string, 'strm) StringCvt.reader
   }
@@ -73,14 +73,18 @@ end = struct
   fun escaped' (config : 'strm config) input1 strm =
         (#textData config || #delim config || cr || lf || #escape config) input1 strm
 
-  fun escaped (config : 'strm config) input1 strm =
-        (#quote config) input1 strm           >>= (fn strm' =>
+  fun escaped quote (config : 'strm config) input1 strm =
+        quote input1 strm                     >>= (fn strm' =>
         repeat (escaped' config) input1 strm' >>= (fn (s, strm'') =>
-        (#quote config) input1 strm''         >>= (fn strm''' =>
+        quote input1 strm''                   >>= (fn strm''' =>
         SOME (s, strm'''))))
 
   fun field config input1 strm =
-          mapFst concat ((escaped config || nonEscaped config) input1 strm)
+        case #quote config of
+             NONE =>
+               mapFst concat (nonEscaped config input1 strm)
+           | SOME quote =>
+               mapFst concat ((escaped quote config || nonEscaped config) input1 strm)
 
   fun field' (config : 'strm config) input1 strm =
         (#delim config) input1 strm >>= (fn (_, strm') =>
@@ -120,7 +124,7 @@ end = struct
         let
           val csvConfig =
             { delim = comma,
-              quote = discard dquote,
+              quote = SOME (discard dquote),
               textData = textData (fn c => not (
                 c < Char.chr 0x20 orelse
                 c = #"\""         orelse
