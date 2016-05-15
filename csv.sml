@@ -2,7 +2,7 @@ structure CSV :> sig
   exception CSV
 
   type 'strm config = {
-    delim : (char, 'strm) StringCvt.reader -> 'strm -> (unit * 'strm)
+    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
   }
 
   val scan : ('a) config -> (char, 'a) StringCvt.reader -> (string list, 'a) StringCvt.reader
@@ -11,7 +11,7 @@ end = struct
   exception CSV
 
   type ('strm) config = {
-    delim : (char, 'strm) StringCvt.reader -> 'strm -> (unit * 'strm)
+    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
   }
 
   fun char c input1 strm =
@@ -111,12 +111,12 @@ end = struct
         let
           val (_, strm') = class input1 strm
         in
-          ((), strm')
+          strm'
         end
 
   fun field' (config : 'a config) input1 strm =
         let
-          val ((), strm') = (#delim config) input1 strm
+          val strm' = (#delim config) input1 strm
           val (field, strm'') = field input1 strm'
         in
           (field, strm'')
