@@ -22,6 +22,12 @@ end = struct
   fun (SOME x) >>= k = k x
     | NONE     >>= k = NONE
 
+  infix ||
+  fun (a || b) input1 strm =
+        case a input1 strm of
+             SOME x => SOME x
+           | NONE => b input1 strm
+
   fun mapFst f (SOME (fst, snd)) = SOME (f fst, snd)
     | mapFst f NONE = NONE
 
@@ -41,22 +47,15 @@ end = struct
         SOME (cr' ^ lf', strm'')))
 
   fun newline input1 strm =
-        case crlf input1 strm of
-             SOME x => SOME x
-           | NONE =>
-               case cr input1 strm of
-                    SOME x => SOME x
-                  | NONE => lf input1 strm
+        (crlf || cr || lf) input1 strm
 
   fun eof input1 strm =
         case input1 strm of
-             NONE => SOME ((), strm)
+             NONE => SOME ("", strm)
            | SOME _ => NONE
 
   fun newlineOrEof input1 strm =
-        case newline input1 strm of
-             SOME x => SOME x
-           | NONE => mapFst (fn () => "") (eof input1 strm)
+        (newline || eof) input1 strm
 
   fun textData (config : 'strm config) input1 strm =
         case input1 strm of
@@ -85,12 +84,6 @@ end = struct
         discard dquote input1 strm  >>= (fn strm'  =>
         discard dquote input1 strm' >>= (fn strm'' =>
         SOME ("\"", strm'')))
-
-  infix ||
-  fun (a || b) input1 strm =
-        case a input1 strm of
-             SOME x => SOME x
-           | NONE => b input1 strm
 
   fun escaped' (config : 'strm config) input1 strm =
         (textData config || #delim config || cr || lf || #escape config) input1 strm
