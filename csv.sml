@@ -33,12 +33,13 @@ end = struct
         case input1 strm of
              NONE => raise CSV
            | SOME (c, strm') =>
-               if Char.chr 0x20 <= c andalso c <= Char.chr 0x21 orelse
-                  Char.chr 0x23 <= c andalso c <= Char.chr 0x2b orelse
-                  Char.chr 0x2d <= c andalso c <= Char.chr 0x7e then
-                 (c, strm')
-               else
+               if c < Char.chr 0x20 orelse
+                  c = Char.chr 0x22 orelse
+                  c = Char.chr 0x2c orelse
+                  c = Char.chr 0x7f then
                  raise CSV
+               else
+                 (c, strm')
 
   fun repeat class input1 strm =
         let
