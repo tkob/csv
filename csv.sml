@@ -28,36 +28,6 @@ end = struct
              SOME x => SOME x
            | NONE => b input1 strm
 
-  fun mapFst f (SOME (fst, snd)) = SOME (f fst, snd)
-    | mapFst f NONE = NONE
-
-  fun char c input1 strm =
-        case input1 strm of
-             NONE => NONE
-           | SOME (c', strm') =>
-               if c' = c then SOME (String.str c', strm') else NONE
-
-  fun comma input1 strm = char #"," input1 strm
-  fun dquote input1 strm = char #"\"" input1 strm
-  fun cr input1 strm = char (Char.chr 0x0d) input1 strm
-  fun lf input1 strm = char (Char.chr 0x0a) input1 strm
-
-  fun crlf input1 strm =
-        cr input1 strm  >>= (fn (cr', strm')  =>
-        lf input1 strm' >>= (fn (lf', strm'') =>
-        SOME (cr' ^ lf', strm'')))
-
-  fun newline input1 strm =
-        (crlf || cr || lf) input1 strm
-
-  fun eof input1 strm =
-        case input1 strm of
-             NONE => SOME ("", strm)
-           | SOME _ => NONE
-
-  fun newlineOrEof input1 strm =
-        (newline || eof) input1 strm
-
   fun repeat class input1 strm =
         let
           fun loop cs strm =
@@ -67,6 +37,36 @@ end = struct
         in
           loop [] strm
         end
+
+  fun discard class input1 strm =
+        case class input1 strm of
+             SOME (_, strm') => SOME strm'
+           | NONE => NONE
+
+  fun mapFst f (SOME (fst, snd)) = SOME (f fst, snd)
+    | mapFst f NONE = NONE
+
+  fun char c input1 strm =
+        case input1 strm of
+             NONE => NONE
+           | SOME (c', strm') =>
+               if c' = c then SOME (String.str c', strm') else NONE
+
+  (* new line and eof *)
+  fun cr input1 strm = char (Char.chr 0x0d) input1 strm
+  fun lf input1 strm = char (Char.chr 0x0a) input1 strm
+  fun crlf input1 strm =
+        cr input1 strm  >>= (fn (cr', strm')  =>
+        lf input1 strm' >>= (fn (lf', strm'') =>
+        SOME (cr' ^ lf', strm'')))
+  fun newline input1 strm =
+        (crlf || cr || lf) input1 strm
+  fun eof input1 strm =
+        case input1 strm of
+             NONE => SOME ("", strm)
+           | SOME _ => NONE
+  fun newlineOrEof input1 strm =
+        (newline || eof) input1 strm
 
   fun textData' (config : 'strm config) input1 strm =
         case input1 strm of
@@ -80,16 +80,6 @@ end = struct
         SOME (implode (c::cs), strm'')))
 
   fun nonEscaped config input1 strm = repeat (textData config) input1 strm
-
-  fun discard class input1 strm =
-        case class input1 strm of
-             SOME (_, strm') => SOME strm'
-           | NONE => NONE
-
-  fun dquotes input1 strm =
-        discard dquote input1 strm  >>= (fn strm'  =>
-        discard dquote input1 strm' >>= (fn strm'' =>
-        SOME ("\"", strm'')))
 
   fun escaped' (config : 'strm config) input1 strm =
         (textData config || #delim config || cr || lf || #escape config) input1 strm
@@ -117,6 +107,14 @@ end = struct
         record config input1 strm >>= (fn (record, strm') =>
         newlineOrEof input1 strm' >>= (fn (_, strm'') =>
         SOME (record, strm'')))
+
+  (* for CSV *)
+  fun comma input1 strm = char #"," input1 strm
+  fun dquote input1 strm = char #"\"" input1 strm
+  fun dquotes input1 strm =
+        discard dquote input1 strm  >>= (fn strm'  =>
+        discard dquote input1 strm' >>= (fn strm'' =>
+        SOME ("\"", strm'')))
 
   fun scanCSV input1 strm =
         let
