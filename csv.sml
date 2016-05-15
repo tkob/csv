@@ -108,7 +108,7 @@ end *) = struct
           val (record, strm') = record input1 strm
         in
           let
-            val (_, strm'') = newline input1 strm
+            val (_, strm'') = newline input1 strm'
           in
             (record, strm'')
           end
