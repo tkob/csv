@@ -34,12 +34,13 @@ end = struct
   fun char c input1 strm =
         case input1 strm of
              NONE => NONE
-           | SOME (c', strm') => if c' = c then SOME (c', strm') else NONE
+           | SOME (c', strm') =>
+               if c' = c then SOME (String.str c', strm') else NONE
 
-  fun comma input1 strm = mapFst String.str (char #"," input1 strm)
-  fun dquote input1 strm = mapFst String.str (char #"\"" input1 strm)
-  fun cr input1 strm = mapFst String.str (char (Char.chr 0x0d) input1 strm)
-  fun lf input1 strm = mapFst String.str (char (Char.chr 0x0a) input1 strm)
+  fun comma input1 strm = char #"," input1 strm
+  fun dquote input1 strm = char #"\"" input1 strm
+  fun cr input1 strm = char (Char.chr 0x0d) input1 strm
+  fun lf input1 strm = char (Char.chr 0x0a) input1 strm
 
   fun crlf input1 strm =
         cr input1 strm  >>= (fn (cr', strm')  =>
