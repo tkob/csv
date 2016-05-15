@@ -29,6 +29,15 @@ end = struct
         mapFst String.str (cr input1 strm) handle CSV =>
         mapFst String.str (lf input1 strm)
 
+  fun eof input1 strm =
+        case input1 strm of
+             NONE => ((), strm)
+           | SOME _ => raise CSV
+
+  fun newlineOrEof input1 strm =
+        newline input1 strm handle CSV =>
+        mapFst (fn () => "") (eof input1 strm)
+
   fun textData input1 strm =
         case input1 strm of
              NONE => raise CSV
@@ -107,13 +116,9 @@ end = struct
   fun scan input1 strm =
         let
           val (record, strm') = record input1 strm
+          val (_, strm'') = newlineOrEof input1 strm'
         in
-          let
-            val (_, strm'') = newline input1 strm'
-          in
-            SOME (record, strm'')
-          end
-          handle CSV => SOME (record, strm')
+          SOME (record, strm'')
         end
         handle CSV => NONE
 end
