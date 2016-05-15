@@ -1,7 +1,7 @@
-structure CSV (* :> sig
+structure CSV :> sig
   exception CSV
   val scan : (char, 'a) StringCvt.reader -> (string list, 'a) StringCvt.reader
-end *) = struct
+end = struct
   exception CSV
 
   fun char c input1 strm =
@@ -110,8 +110,9 @@ end *) = struct
           let
             val (_, strm'') = newline input1 strm'
           in
-            (record, strm'')
+            SOME (record, strm'')
           end
-          handle CSV => (record, strm')
+          handle CSV => SOME (record, strm')
         end
+        handle CSV => NONE
 end

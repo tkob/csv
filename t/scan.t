@@ -2,7 +2,7 @@
 
     - use "csv.sml";
     ...
-    - fun scan s = let val (record, strm) = CSV.scan Substring.getc (Substring.full s) in (record, Substring.string strm) end;
+    - fun scan s = case CSV.scan Substring.getc (Substring.full s) of SOME (record, strm) => (record, Substring.string strm);
     ...
     val scan = fn : string -> string list * string
 
