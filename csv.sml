@@ -97,9 +97,16 @@ end = struct
           (implode cs, strm')
         end
 
+  fun discard class input1 strm =
+        let
+          val (_, strm') = class input1 strm
+        in
+          ((), strm')
+        end
+
   fun field' input1 strm =
         let
-          val (_, strm') = comma input1 strm
+          val ((), strm') = discard comma input1 strm
           val (field, strm'') = field input1 strm'
         in
           (field, strm'')
