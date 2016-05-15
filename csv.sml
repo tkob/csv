@@ -1,29 +1,29 @@
 structure CSV :> sig
-  exception CSV
-
   type 'strm config = {
-    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
-    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
+    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
+    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
     textData : char -> bool,
-    escape : (char, 'strm) StringCvt.reader -> 'strm -> char * 'strm
+    escape : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader
   }
 
   val scan : 'strm config -> (char, 'strm) StringCvt.reader -> (string list, 'strm) StringCvt.reader
   val scanCSV : (char, 'strm) StringCvt.reader -> (string list, 'strm) StringCvt.reader
 end = struct
-  exception CSV
-
   type 'strm config = {
-    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
-    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
+    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
+    quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
     textData : char -> bool,
-    escape : (char, 'strm) StringCvt.reader -> 'strm -> char * 'strm
+    escape : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader
   }
+
+  infix >>=
+  fun (SOME x) >>= k = k x
+    | NONE     >>= k = NONE
 
   fun char c input1 strm =
         case input1 strm of
-             NONE => raise CSV
-           | SOME (c', strm') => if c' = c then (c', strm') else raise CSV
+             NONE => NONE
+           | SOME (c', strm') => if c' = c then SOME (c', strm') else NONE
 
   fun comma input1 strm = char #"," input1 strm
   fun dquote input1 strm = char #"\"" input1 strm
@@ -31,113 +31,99 @@ end = struct
   fun lf input1 strm = char (Char.chr 0x0a) input1 strm
 
   fun crlf input1 strm =
-        let
-          val (cr', strm') = cr input1 strm
-          val (lf', strm'') = lf input1 strm'
-        in
-          (implode [cr', lf'], strm'')
-        end
+        cr input1 strm  >>= (fn (cr', strm')  =>
+        lf input1 strm' >>= (fn (lf', strm'') =>
+        SOME (implode [cr', lf'], strm'')))
 
-  fun mapFst f (fst, snd) = (f fst, snd)
+  fun mapFst f (SOME (fst, snd)) = SOME (f fst, snd)
+    | mapFst f NONE = NONE
 
   fun newline input1 strm =
-        crlf input1 strm                   handle CSV =>
-        mapFst String.str (cr input1 strm) handle CSV =>
-        mapFst String.str (lf input1 strm)
+        case crlf input1 strm of
+             SOME x => SOME x
+           | NONE =>
+               case mapFst String.str (cr input1 strm) of
+                    SOME x => SOME x
+                  | NONE => mapFst String.str (lf input1 strm)
 
   fun eof input1 strm =
         case input1 strm of
-             NONE => ((), strm)
-           | SOME _ => raise CSV
+             NONE => SOME ((), strm)
+           | SOME _ => NONE
 
   fun newlineOrEof input1 strm =
-        newline input1 strm handle CSV =>
-        mapFst (fn () => "") (eof input1 strm)
+        case newline input1 strm of
+             SOME x => SOME x
+           | NONE => mapFst (fn () => "") (eof input1 strm)
 
   fun textData (config : 'strm config) input1 strm =
         case input1 strm of
-             NONE => raise CSV
+             NONE => NONE
            | SOME (c, strm') =>
-               if #textData config c then (c, strm') else raise CSV
+               if #textData config c then SOME (c, strm') else NONE
 
   fun repeat class input1 strm =
         let
           fun loop cs strm =
-                let
-                  val (c, strm') = class input1 strm
-                in
-                  loop (c::cs) strm'
-                end
-                handle CSV => (rev cs, strm)
+                case class input1 strm of
+                     SOME (c, strm') => loop (c::cs) strm'
+                   | NONE => SOME (rev cs, strm)
         in
           loop [] strm
         end
 
   fun nonEscaped config input1 strm = repeat (textData config) input1 strm
 
+  fun discard class input1 strm =
+        case class input1 strm of
+             SOME (_, strm') => SOME strm'
+           | NONE => NONE
+
   fun dquotes input1 strm =
-        let
-          val (_, strm') = dquote input1 strm
-          val (_, strm'') = dquote input1 strm'
-        in
-          (#"\"", strm')
-        end
+        discard dquote input1 strm  >>= (fn strm'  =>
+        discard dquote input1 strm' >>= (fn strm'' =>
+        SOME (#"\"", strm'')))
 
   fun escaped' (config : 'strm config) input1 strm =
-        textData config input1 strm handle CSV =>
-        comma input1 strm handle CSV =>
-        cr input1 strm    handle CSV =>
-        lf input1 strm    handle CSV =>
-        (#escape config) input1 strm
+        case textData config input1 strm of
+             SOME x => SOME x
+           | NONE =>
+               case comma input1 strm of
+                    SOME x => SOME x
+                  | NONE =>
+                      case cr input1 strm of
+                           SOME x=> SOME x
+                         | NONE =>
+                             case lf input1 strm of
+                                  SOME x => SOME x
+                                | NONE => (#escape config) input1 strm
 
   fun escaped (config : 'strm config) input1 strm =
-        let
-          val strm' = (#quote config) input1 strm
-          val (s, strm'') = repeat (escaped' config) input1 strm'
-          val strm''' = (#quote config) input1 strm''
-        in
-          (s, strm''')
-        end
+        (#quote config) input1 strm           >>= (fn strm' =>
+        repeat (escaped' config) input1 strm' >>= (fn (s, strm'') =>
+        (#quote config) input1 strm''         >>= (fn strm''' =>
+        SOME (s, strm'''))))
 
   fun field config input1 strm =
-        let
-          val (cs, strm') =
-            escaped config input1 strm handle CSV => nonEscaped config input1 strm
-        in
-          (implode cs, strm')
-        end
-
-  fun discard class input1 strm =
-        let
-          val (_, strm') = class input1 strm
-        in
-          strm'
-        end
+          mapFst implode (
+            case escaped config input1 strm of
+                 SOME x => SOME x
+               | NONE => nonEscaped config input1 strm)
 
   fun field' (config : 'strm config) input1 strm =
-        let
-          val strm' = (#delim config) input1 strm
-          val (field, strm'') = field config input1 strm'
-        in
-          (field, strm'')
-        end
+        (#delim config) input1 strm >>= (fn strm' =>
+        field config input1 strm'   >>= (fn (field, strm'') =>
+        SOME (field, strm'')))
 
   fun record config input1 strm =
-        let
-          val (first, strm') = field config input1 strm
-          val (rest, strm'') = repeat (field' config) input1 strm'
-        in
-          (first::rest, strm'')
-        end
+        field config input1 strm            >>= (fn (first, strm') =>
+        repeat (field' config) input1 strm' >>= (fn (rest, strm'') =>
+        SOME (first::rest, strm'')))
 
   fun scan config input1 strm =
-        let
-          val (record, strm') = record config input1 strm
-          val (_, strm'') = newlineOrEof input1 strm'
-        in
-          SOME (record, strm'')
-        end
-        handle CSV => NONE
+        record config input1 strm >>= (fn (record, strm') =>
+        newlineOrEof input1 strm' >>= (fn (_, strm'') =>
+        SOME (record, strm'')))
 
   fun scanCSV input1 strm =
         let
