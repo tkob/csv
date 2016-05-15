@@ -1,6 +1,6 @@
 structure CSV :> sig
   type 'strm config = {
-    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
+    delim : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader,
     quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
     textData : char -> bool,
     escape : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader
@@ -10,7 +10,7 @@ structure CSV :> sig
   val scanCSV : (char, 'strm) StringCvt.reader -> (string list, 'strm) StringCvt.reader
 end = struct
   type 'strm config = {
-    delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
+    delim : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader,
     quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm option,
     textData : char -> bool,
     escape : (char, 'strm) StringCvt.reader -> (char, 'strm) StringCvt.reader
@@ -91,7 +91,7 @@ end = struct
            | NONE => b input1 strm
 
   fun escaped' (config : 'strm config) input1 strm =
-        (textData config || comma || cr || lf || #escape config) input1 strm
+        (textData config || #delim config || cr || lf || #escape config) input1 strm
 
   fun escaped (config : 'strm config) input1 strm =
         (#quote config) input1 strm           >>= (fn strm' =>
@@ -103,7 +103,7 @@ end = struct
           mapFst implode ((escaped config || nonEscaped config) input1 strm)
 
   fun field' (config : 'strm config) input1 strm =
-        (#delim config) input1 strm >>= (fn strm' =>
+        (#delim config) input1 strm >>= (fn (_, strm') =>
         field config input1 strm'   >>= (fn (field, strm'') =>
         SOME (field, strm'')))
 
@@ -120,7 +120,7 @@ end = struct
   fun scanCSV input1 strm =
         let
           val csvConfig =
-            { delim = discard comma,
+            { delim = comma,
               quote = discard dquote,
               textData = fn c => not (
                 c < Char.chr 0x20 orelse
