@@ -84,19 +84,14 @@ end = struct
         discard dquote input1 strm' >>= (fn strm'' =>
         SOME (#"\"", strm'')))
 
-  fun escaped' (config : 'strm config) input1 strm =
-        case textData config input1 strm of
+  infix ||
+  fun (a || b) input1 strm =
+        case a input1 strm of
              SOME x => SOME x
-           | NONE =>
-               case comma input1 strm of
-                    SOME x => SOME x
-                  | NONE =>
-                      case cr input1 strm of
-                           SOME x=> SOME x
-                         | NONE =>
-                             case lf input1 strm of
-                                  SOME x => SOME x
-                                | NONE => (#escape config) input1 strm
+           | NONE => b input1 strm
+
+  fun escaped' (config : 'strm config) input1 strm =
+        (textData config || comma || cr || lf || #escape config) input1 strm
 
   fun escaped (config : 'strm config) input1 strm =
         (#quote config) input1 strm           >>= (fn strm' =>
@@ -105,10 +100,7 @@ end = struct
         SOME (s, strm'''))))
 
   fun field config input1 strm =
-          mapFst implode (
-            case escaped config input1 strm of
-                 SOME x => SOME x
-               | NONE => nonEscaped config input1 strm)
+          mapFst implode ((escaped config || nonEscaped config) input1 strm)
 
   fun field' (config : 'strm config) input1 strm =
         (#delim config) input1 strm >>= (fn strm' =>
