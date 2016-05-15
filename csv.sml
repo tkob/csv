@@ -6,12 +6,12 @@ structure CSV :> sig
     quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
   }
 
-  val scan : ('a) config -> (char, 'a) StringCvt.reader -> (string list, 'a) StringCvt.reader
-  val scanCSV : (char, 'a) StringCvt.reader -> (string list, 'a) StringCvt.reader
+  val scan : 'strm config -> (char, 'strm) StringCvt.reader -> (string list, 'strm) StringCvt.reader
+  val scanCSV : (char, 'strm) StringCvt.reader -> (string list, 'strm) StringCvt.reader
 end = struct
   exception CSV
 
-  type ('strm) config = {
+  type 'strm config = {
     delim : (char, 'strm) StringCvt.reader -> 'strm -> 'strm,
     quote : (char, 'strm) StringCvt.reader -> 'strm -> 'strm
   }
@@ -92,7 +92,7 @@ end = struct
         lf input1 strm    handle CSV =>
         dquotes input1 strm
 
-  fun escaped (config : 'a config) input1 strm =
+  fun escaped (config : 'strm config) input1 strm =
         let
           val strm' = (#quote config) input1 strm
           val (s, strm'') = repeat escaped' input1 strm'
@@ -116,7 +116,7 @@ end = struct
           strm'
         end
 
-  fun field' (config : 'a config) input1 strm =
+  fun field' (config : 'strm config) input1 strm =
         let
           val strm' = (#delim config) input1 strm
           val (field, strm'') = field config input1 strm'
