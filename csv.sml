@@ -123,8 +123,8 @@ end = struct
               quote = discard dquote,
               textData = textData (fn c => not (
                 c < Char.chr 0x20 orelse
-                c = Char.chr 0x22 orelse
-                c = Char.chr 0x2c orelse
+                c = #"\""         orelse
+                c = #","          orelse
                 c = Char.chr 0x7f)),
               escape = dquotes }
         in
