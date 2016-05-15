@@ -58,12 +58,6 @@ end = struct
   fun newlineOrEof input1 strm =
         (newline || eof) input1 strm
 
-  fun textData (config : 'strm config) input1 strm =
-        case input1 strm of
-             NONE => NONE
-           | SOME (c, strm') =>
-               if #textData config c then SOME (String.str c, strm') else NONE
-
   fun repeat class input1 strm =
         let
           fun loop cs strm =
@@ -73,6 +67,17 @@ end = struct
         in
           loop [] strm
         end
+
+  fun textData' (config : 'strm config) input1 strm =
+        case input1 strm of
+             NONE => NONE
+           | SOME (c, strm') =>
+               if #textData config c then SOME (c, strm') else NONE
+
+  fun textData config input1 strm =
+        textData' config input1 strm           >>= (fn (c, strm') =>
+        repeat (textData' config) input1 strm' >>= (fn (cs, strm'') =>
+        SOME (implode (c::cs), strm'')))
 
   fun nonEscaped config input1 strm = repeat (textData config) input1 strm
 
