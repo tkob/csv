@@ -1,4 +1,8 @@
 check:
-	prove -f --exec ./t/do-test
+	rm -f log.txt
+	prove -f --exec './t/do-test -log log.txt'
 
-.PHONY: check
+clean:
+	rm -f log.txt
+
+.PHONY: check clean
