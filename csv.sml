@@ -9,6 +9,7 @@ structure CSV :> sig
 
   val scan : 'strm config -> 'strm input1 -> (string list, 'strm) StringCvt.reader
   val scanCSV : 'strm input1 -> (string list, 'strm) StringCvt.reader
+  val scanTSV : 'strm input1 -> (string list, 'strm) StringCvt.reader
 end = struct
   type 'strm input1 = (char, 'strm) StringCvt.reader
   type 'strm config = {
@@ -129,6 +130,24 @@ end = struct
                 c < Char.chr 0x20 orelse
                 c = #"\""         orelse
                 c = #","          orelse
+                c = Char.chr 0x7f)),
+              escape = dquotes }
+        in
+          scan csvConfig input1 strm
+        end
+
+  (* for TSV *)
+  fun tab input1 strm = char (Char.chr 0x09) input1 strm
+
+  fun scanTSV input1 strm =
+        let
+          val csvConfig =
+            { delim = tab,
+              quote = SOME (discard dquote),
+              textData = textData (fn c => not (
+                c < Char.chr 0x20 orelse
+                c = #"\""         orelse
+                c = Char.chr 0x09 orelse
                 c = Char.chr 0x7f)),
               escape = dquotes }
         in
