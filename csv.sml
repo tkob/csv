@@ -4,19 +4,22 @@ structure CSV :> sig
     delim : 'strm input1 -> (string, 'strm) StringCvt.reader,
     quote : ('strm input1 -> 'strm -> 'strm option) option,
     textData : 'strm input1 -> (string, 'strm) StringCvt.reader,
-    escape : 'strm input1 -> (string, 'strm) StringCvt.reader
+    escape : 'strm input1 -> (string, 'strm) StringCvt.reader,
+    strip : 'strm input1 -> 'strm -> 'strm
   }
 
   val scan : 'strm config -> 'strm input1 -> (string list, 'strm) StringCvt.reader
   val scanCSV : 'strm input1 -> (string list, 'strm) StringCvt.reader
   val scanTSV : 'strm input1 -> (string list, 'strm) StringCvt.reader
+  val scanAwk : 'strm input1 -> (string list, 'strm) StringCvt.reader
 end = struct
   type 'strm input1 = (char, 'strm) StringCvt.reader
   type 'strm config = {
     delim : 'strm input1 -> (string, 'strm) StringCvt.reader,
     quote : ('strm input1 -> 'strm -> 'strm option) option,
     textData : 'strm input1 -> (string, 'strm) StringCvt.reader,
-    escape : 'strm input1 -> (string, 'strm) StringCvt.reader
+    escape : 'strm input1 -> (string, 'strm) StringCvt.reader,
+    strip : 'strm input1 -> 'strm -> 'strm
   }
 
   infix >>=
@@ -80,12 +83,22 @@ end = struct
         quote input1 strm''                   >>= (fn strm''' =>
         SOME (s, strm'''))))
 
+  fun stripRight (config : 'strm config) input1 strm =
+        SOME ((#strip config) input1 strm) >>= (fn strm' =>
+        case newlineOrEof input1 strm' of
+             NONE => SOME strm
+           | SOME _ => SOME strm')
+
   fun field config input1 strm =
         case #quote config of
              NONE =>
-               mapFst concat (nonEscaped config input1 strm)
+               mapFst concat (nonEscaped config input1 strm) >>= (fn (datum, strm') =>
+               stripRight config input1 strm' >>= (fn strm'' =>
+               SOME (datum, strm'')))
            | SOME quote =>
-               mapFst concat ((escaped quote config || nonEscaped config) input1 strm)
+               mapFst concat ((escaped quote config || nonEscaped config) input1 strm) >>= (fn (datum, strm') =>
+               stripRight config input1 strm' >>= (fn strm'' =>
+               SOME (datum, strm'')))
 
   fun field' (config : 'strm config) input1 strm =
         (#delim config) input1 strm >>= (fn (_, strm') =>
@@ -97,13 +110,23 @@ end = struct
         repeat (field' config) input1 strm' >>= (fn (rest, strm'') =>
         SOME (first::rest, strm'')))
 
+  fun stripLeft (config : 'strm config) input1 strm =
+        SOME ((#strip config) input1 strm)
+
   fun scan config input1 strm =
-        case input1 strm of
+        stripLeft config input1 strm >>= (fn strm' =>
+        case input1 strm' of
              NONE => NONE
            | SOME _ =>
-               record config input1 strm >>= (fn (record, strm') =>
-               newlineOrEof input1 strm' >>= (fn (_, strm'') =>
-               SOME (record, strm'')))
+               record config input1 strm' >>= (fn (record, strm'') =>
+               newlineOrEof input1 strm'' >>= (fn (_, strm''') =>
+               SOME (record, strm'''))))
+
+  fun stripNone input1 strm = strm
+  fun strip class input1 strm =
+        case class input1 strm of
+             NONE => strm
+           | SOME (_, strm') => strm'
 
   (* utility for textData config *)
   fun textData' pred input1 strm =
@@ -134,7 +157,8 @@ end = struct
                 c = #"\""         orelse
                 c = #","          orelse
                 c = Char.chr 0x7f)),
-              escape = dquotes }
+              escape = dquotes,
+              strip = stripNone }
         in
           scan csvConfig input1 strm
         end
@@ -152,7 +176,30 @@ end = struct
                 c = #"\""         orelse
                 c = Char.chr 0x09 orelse
                 c = Char.chr 0x7f)),
-              escape = dquotes }
+              escape = dquotes,
+              strip = stripNone }
+        in
+          scan csvConfig input1 strm
+        end
+
+  (* for awk style *)
+  fun spaces input1 strm = textData (fn c =>
+        c = #" "  orelse
+        c = #"\t") input1 strm
+
+  fun scanAwk input1 strm =
+        let
+          fun textData' input1 strm = textData (fn c => not (
+                c < Char.chr 0x20 orelse
+                c = #" "          orelse
+                c = #"\t"         orelse
+                c = Char.chr 0x7f)) input1 strm
+          val csvConfig =
+            { delim = spaces,
+              quote = NONE,
+              textData = textData',
+              escape = textData',
+              strip = strip spaces }
         in
           scan csvConfig input1 strm
         end
