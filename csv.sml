@@ -98,9 +98,12 @@ end = struct
         SOME (first::rest, strm'')))
 
   fun scan config input1 strm =
-        record config input1 strm >>= (fn (record, strm') =>
-        newlineOrEof input1 strm' >>= (fn (_, strm'') =>
-        SOME (record, strm'')))
+        case input1 strm of
+             NONE => NONE
+           | SOME _ =>
+               record config input1 strm >>= (fn (record, strm') =>
+               newlineOrEof input1 strm' >>= (fn (_, strm'') =>
+               SOME (record, strm'')))
 
   (* utility for textData config *)
   fun textData' pred input1 strm =

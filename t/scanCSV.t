@@ -10,9 +10,8 @@
 
 ## Empty
 
-    - val (record, rest) = scan "";
-    val record = [""] : string list
-    val rest = "" : string
+    - CSV.scanCSV Substring.getc (Substring.full "");
+    val it = NONE : (string list * substring) option
 
 ## Empty line
 
